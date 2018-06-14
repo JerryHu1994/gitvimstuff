@@ -11,5 +11,5 @@ git add .
 git commit -m "Initial Commit"
 git remote add origin "$remotepath"
 git remote -v
-# git push -u origin master
+git push -u origin master
 echo "Push Done."
