@@ -1,0 +1,15 @@
+#!/bin/bash
+if [ "$#" -ne 2 ]; then
+    echo "Usage: .gitconnect localpath remotepath"
+    exit 1
+fi
+localpath=$1
+remotepath=$2
+cd "$localpath"
+git init
+git add .
+git commit -m "Initial Commit"
+git remote add origin "$remotepath"
+git remote -v
+git push -u origin master
+echo "Push Done."

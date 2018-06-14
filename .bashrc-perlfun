@@ -1,0 +1,241 @@
+# location where perlbrew will install perl versions
+PERL_BINS=~/perl5-bins
+
+# list available commands
+function perlhel() {
+    echo "perlhel                   - show this help list"
+    echo "perlcpm                   - install cpanminus (cpanm) to current version of perl"
+    echo "perlins                   - show available perlbrew perl versions"
+    echo "perlins <version>         - install perl <version> as <version> in $PERL_BINS"
+    echo "perlins <version> <alias> - install perl <version> as <alias> in $PERL_BINS"
+    echo "                          - <version> can be an integer index from perlins"
+    echo "perlist                   - list installed versions of perl with version numbers"
+    echo "perlmvn <module>          - show version number of specified <module>"
+    echo "perluse <alias> | perlsys - use specified <alias> of perl for this execution shell"
+    echo "                          - <alias> can be an integer index from perlist"
+    echo "perlwhi                   - show current version of perl for this execution shell"
+	echo "perlbre					- install perlbrew"
+    echo "perlmod                   - install perl modules from environment-modules"
+}
+
+# show version number of installed perl module
+function perlmvn() { perl -M$1\ 9999999; }
+
+# set BASE_PATH environment variable for current shell
+# this function is not meant to be invoked by the user
+function _set_perl_base_path() {
+    # if [ ! -v BASE_PATH ]; then
+    if [ -z "$BASE_PATH" ]; then
+        export BASE_PATH=$PATH
+    fi
+}
+
+# show which version of perl is currently being used
+function perlwhi() {
+    _set_perl_base_path
+    echo Using perl bin: `which perl`
+}
+
+# list system perl and all locally installed perl versions
+function perlist() {
+    _set_perl_base_path
+
+	# get system perl version by temporarily restoring BASE_PATH
+    temp=$PATH
+    export PATH=$BASE_PATH
+    perlsys=`which perl`
+    export PATH=$temp
+    version=`$perlsys -v`
+    version=`echo $version | sed -e 's/This is //' -e 's/built.*$//'`
+    echo System Perl Version
+    echo "  " perlsys = $perlsys $version
+
+	# search and list locally installed perl versions by alias
+    echo Locally installed perl versions
+    if [ ! -d $PERL_BINS ]; then
+        echo "  " No locally installed perl versions
+        perlwhi
+        return
+    fi
+    aliases=($(\ls "$PERL_BINS"))
+    if [ -z "$aliases" ]; then
+        echo "  " No locally installed perl versions
+        perlwhi
+        return
+    fi
+    echo "  " ${aliases[@]}
+    for i in ${!aliases[*]} 
+    do
+        alias=${aliases[$i]}
+        if [ -x $PERL_BINS/$alias/perls/perl*/bin/perl ]; then
+            echo "  " $i")" $alias  `\ls $PERL_BINS/$alias/perls/perl*/bin/perl`
+        fi
+    done
+    perlwhi
+}
+
+# use a specified version of perl in the current shell
+function perluse() {
+    _set_perl_base_path
+    perlalias=$1
+    if [ -z "$perlalias" ]; then
+        perlist
+        return
+    fi
+	# switch to system perl
+    if [ $perlalias == "perlsys" ]; then
+        export PATH=$BASE_PATH
+		perlwhi
+		return
+	fi
+    if [ ! -d $PERL_BINS/$perlalias/perls/perl*/bin ]; then
+        # test perlalias to see if it is a number and 
+        # use it as a list index if it is
+        if [[ $perlalias =~ ^[0-9]+$ ]]; then
+            aliases=($(\ls "$PERL_BINS"))
+            newperlalias=${aliases[$perlalias]}
+            if [ ! -z "$newperlalias" ]; then
+                perlalias=$newperlalias
+            fi
+            if [ ! -d $PERL_BINS/$perlalias/perls/perl*/bin ]; then
+                echo $PERL_BINS/$perlalias/perls/perl*/bin does not exist
+                perlist
+                return
+            fi
+        else
+            echo $PERL_BINS/$perlalias/perls/perl*/bin does not exist
+		    perlist
+		    return
+        fi
+	fi
+	# switch to specified perl by alias
+    export PATH=`echo $PERL_BINS/$perlalias/perls/perl*/bin`:$BASE_PATH
+    perlwhi
+}
+
+# install cpanminus (cpanm) to the current version of perl
+function perlcpm() {
+    curl -L http://cpanmin.us | perl - App::cpanminus
+}
+
+function _show_perlbrew_available() {
+    echo Available perlbrew install versions
+    versions=(`perlbrew available`)
+    for i in ${!versions[*]} 
+    do
+        version=${versions[$i]}
+        echo "  " $i")" $version
+    done
+}
+
+# use perlbrew to install a specified version of perl with an alias
+function perlins() {
+    _set_perl_base_path
+    perlversion=$1
+    perlalias=$2
+
+	# check whether or not perlbrew exists
+    perlbrew=`which perlbrew`
+    if [ -z "$perlbrew" ]; then
+        echo perlbrew command not found - install failed
+        echo
+        perlist
+        return
+    fi
+
+    # test perlversion to see if it is a number and 
+    # use it as a list index if it is
+    newperlversion=$perlversion
+    if [[ $perlversion =~ ^[0-9]+$ ]]; then
+        versions=(`perlbrew available`)
+        newperlversion=${versions[$perlversion]}
+    fi
+    perlversion=$newperlversion
+
+    # check whether or not <perlalias> is specified
+    if [ -z "$perlalias" ]; then
+        # remove perl- or perl5. from perlversion for perlalias
+        perlalias=${perlversion//perl-/}
+        perlalias=${perlalias//perl5./}
+    fi
+
+	# check whether or not <alias> and <version> are specified
+    if [ -z "$perlversion" -a -z "$perlalias" ]; then
+        echo "usage: perlins <perl-version> <alias>"
+        echo
+        _show_perlbrew_available
+        echo
+        perlist
+        return
+    fi
+
+	# check whether or not <alias> is unique
+    if [ -d $PERL_BINS/$perlalias ]; then
+        echo $perlalias already exists
+        echo
+        perlist
+        return
+    fi
+
+	# create alias directory
+    if [ ! -d $PERL_BINS/$perlalias ]; then
+        mkdir -p $PERL_BINS/$perlalias
+    fi
+
+	# use perlbrew to download and install perl version
+    echo Installing $perlversion to $PERL_BINS/$perlalias
+    export PERLBREW_ROOT=$PERL_BINS/$perlalias
+    perlbrew init
+    perlbrew install -D usethreads $perlversion --notest
+    result=$?
+    if [ $result -ne 0 ]; then
+        echo perlbrew install failed: $result
+        echo
+        _show_perlbrew_available
+        echo
+        perlist
+        return
+    fi
+
+	# clean up perlbrew install so that only Config.pm and perls remain
+    \rm -rf $PERL_BINS/$perlalias/bin    $PERL_BINS/$perlalias/build  $PERL_BINS/$perlalias/build.log    $PERL_BINS/$perlalias/dists    $PERL_BINS/$perlalias/etc
+    perlist
+}
+
+# install perlbrew
+function perlbre() {
+	cpan App::perlbrew
+}
+
+# install perl modules from environment-modules
+function perlmod() {
+    if [ ! -f environment-modules ]; then
+        echo "Cannot find 'environment-modules'! Aborting"
+        return
+    fi
+    CPANMPATH=cpanm
+    PERLPATH=perl
+    OUTPUT=/dev/stdout
+    echo 'Checking for modules'
+    for module in `cat environment-modules`
+    do
+        $PERLPATH -e "use $module;" >> /dev/null 2>&1
+        RETVAL=$?
+        if [ $RETVAL != 0 ]; then
+            echo
+            echo "$module attempting to install"
+            $CPANMPATH --force --notest $module >> $OUTPUT 2>&1
+            RETVAL=$?
+            if [ $RETVAL != 0 ]; then
+                echo "$module failed to install"
+                echo "Check $OUTPUT for errors"
+                echo
+            else
+                echo "$module install succeeded"
+                echo
+            fi
+        else
+            echo "$module already installed"
+        fi
+    done
+}
