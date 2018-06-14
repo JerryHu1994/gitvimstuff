@@ -3,7 +3,7 @@ function cl {
 }
 function gitconnect {
     pwd=`pwd`
-    ./.gitconnect $pwd $1
+    ~/.gitconnect $pwd $1
 }
 
 alias euler='ssh jhu76@euler.wacc.wisc.edu'
