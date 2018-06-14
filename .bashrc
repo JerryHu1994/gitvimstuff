@@ -1,6 +1,11 @@
 function cl {
     builtin cd "$@" && ls
 }
+function gitconnect {
+    pwd=`pwd`
+    ./.gitconnect $pwd $1
+}
+
 alias euler='ssh jhu76@euler.wacc.wisc.edu'
 
 alias cs='ssh jieru@best-linux.cs.wisc.edu'
